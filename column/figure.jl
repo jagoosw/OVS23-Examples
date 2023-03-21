@@ -68,7 +68,7 @@ end
 
 zs = [-198:4:-2;]
 
-fig = Figure(resolution = (1600, 960))
+fig = Figure(resolution = (1920, 960))
 
 axP = Axis(fig[1:3, 1:2], xlabel = "Time (years)", ylabel = "Depth (m)", title = "Phytoplankton Concentraiton (mmol N / m³)")
 
@@ -95,12 +95,14 @@ lines!(axS, [3 - 30/365, 3 - 30/365], [1, -2], color=:black)
 
 axA = Axis(fig[1:2, 4], xlabel = "Time (years)", ylabel = "Frond area (dm² / frond)", title = "Kelp growth (equivilant to growing 500 frond / m² in the top 50m of water)")
 
-lines!(axA, kelp_times ./ year, mean(A, dims=1)[1, :])
+lines!(axA, times[1066:end] ./ year, mean(A, dims=1)[1, :])
 
 axC = Axis(fig[3:4, 4], xlabel = "Time (years)", ylabel = "Carbon stored (kg CO₂ / m²)")
 
-lines!(axC, kelp_times ./ year, sum((C .+ 0.2) .* A .* 0.5 .* 100 * (12 + 16 * 2)/ (12 * 1000), dims = 1)[1, :])
+lines!(axC, times[1066:end] ./ year, sum((C .+ 0.2) .* A .* 0.5 .* 100 * (12 + 16 * 2)/ (12 * 1000), dims = 1)[1, :])
 
 axN = Axis(fig[5:6, 4], xlabel = "Time (years)", ylabel = "Nitrogen stored (mmol N / m²)")
 
-lines!(axN, kelp_times ./ year, sum((N .+ 0.0146) .* A .* 0.5 .* 100 / 14, dims = 1)[1, :])
+lines!(axN, times[1066:end] ./ year, sum((N .+ 0.0146) .* A .* 0.5 .* 100 / 14, dims = 1)[1, :])
+
+save("ovs_column.png", fig)

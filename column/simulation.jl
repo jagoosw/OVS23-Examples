@@ -44,8 +44,8 @@ model = NonhydrostaticModel(; grid,
                               biogeochemistry = LOBSTER(; grid,
                                                           surface_phytosynthetically_active_radiation = PAR⁰,
                                                           carbonates = true,
-                                                          #variable_redfield = true,
-                                                          #particles,
+                                                          variable_redfield = true,
+                                                          particles,
                                                           advection_schemes = (sPOM = WENO(grid), bPOM = WENO(grid))),
                               boundary_conditions = (DIC = FieldBoundaryConditions(top = CO₂_flux),
                                                      NO₃ = FieldBoundaryConditions(top = FluxBoundaryCondition(N_fixation))),
@@ -53,26 +53,29 @@ model = NonhydrostaticModel(; grid,
                               advection = nothing)
 
 # Running first time round for 10 years with `variable_redfield` and `particles` commented out and the following defaults from t =0
-set!(model, P = 0.03, Z = 0.03, NO₃ = 4.0, NH₄ = 0.05, DIC = 2239.8, Alk = 2409.0)
+#set!(model, P = 0.03, Z = 0.03, NO₃ = 4.0, NH₄ = 0.05, DIC = 2239.8, Alk = 2409.0)
 
 # Then uncommenting the below and adding back in variable redfield and particles from below time to `t = 3years`
 # Also need to uncommnet particles writer and change negative scaling from `OM` to `ON` and change output name
-#=model.clock.time = 1year - 30days
+model.clock.time = 1year - 30days
 
-@load "column_steady_state.jld2" tracers
+file = jldopen("column.jld2")
+final_it = iterations = keys(file["timeseries/t"])[end-30]
 
-model.tracers.P[1, 1, 1:50] = tracers.P[1, 1, 1:50];
-model.tracers.Z[1, 1, 1:50] = tracers.Z[1, 1, 1:50];
-model.tracers.NO₃[1, 1, 1:50] = tracers.NO₃[1, 1, 1:50];
-model.tracers.NH₄[1, 1, 1:50] = tracers.NH₄[1, 1, 1:50];
-model.tracers.sPON[1, 1, 1:50] = tracers.sPOM[1, 1, 1:50];
-model.tracers.sPOC[1, 1, 1:50] = tracers.sPOM[1, 1, 1:50] .* model.biogeochemistry.organic_redfield;
-model.tracers.bPON[1, 1, 1:50] = tracers.bPOM[1, 1, 1:50];
-model.tracers.bPOC[1, 1, 1:50] = tracers.bPOM[1, 1, 1:50] .* model.biogeochemistry.organic_redfield;
-model.tracers.DON[1, 1, 1:50] = tracers.DOM[1, 1, 1:50];
-model.tracers.DOC[1, 1, 1:50] = tracers.DOM[1, 1, 1:50] .* model.biogeochemistry.organic_redfield;
-model.tracers.DIC[1, 1, 1:50] = tracers.DIC[1, 1, 1:50];
-model.tracers.Alk[1, 1, 1:50] = tracers.Alk[1, 1, 1:50];=#
+model.tracers.P[1, 1, 1:50] = file["timeseries/P/$final_it"][1, 1, 1:50];
+model.tracers.Z[1, 1, 1:50] = file["timeseries/Z/$final_it"][1, 1, 1:50];
+model.tracers.NO₃[1, 1, 1:50] = file["timeseries/NO₃/$final_it"][1, 1, 1:50];
+model.tracers.NH₄[1, 1, 1:50] = file["timeseries/NH₄/$final_it"][1, 1, 1:50];
+model.tracers.sPON[1, 1, 1:50] = file["timeseries/sPOM/$final_it"][1, 1, 1:50];
+model.tracers.sPOC[1, 1, 1:50] = file["timeseries/sPOM/$final_it"][1, 1, 1:50] .* model.biogeochemistry.organic_redfield;
+model.tracers.bPON[1, 1, 1:50] = file["timeseries/bPOM/$final_it"][1, 1, 1:50];
+model.tracers.bPOC[1, 1, 1:50] = file["timeseries/bPOM/$final_it"][1, 1, 1:50] .* model.biogeochemistry.organic_redfield;
+model.tracers.DON[1, 1, 1:50] = file["timeseries/DOM/$final_it"][1, 1, 1:50];
+model.tracers.DOC[1, 1, 1:50] = file["timeseries/DOM/$final_it"][1, 1, 1:50] .* model.biogeochemistry.organic_redfield;
+model.tracers.DIC[1, 1, 1:50] = file["timeseries/DIC/$final_it"][1, 1, 1:50];
+model.tracers.Alk[1, 1, 1:50] = file["timeseries/Alk/$final_it"][1, 1, 1:50];
+
+close(file)
 
 # ## Simulation
 # Next we setup the simulation along with some callbacks that:
@@ -89,11 +92,11 @@ progress_message(sim) = @printf("Iteration: %04d, time: %s, Δt: %s, wall time: 
                                                         prettytime(sim.run_wall_time))                
 simulation.callbacks[:progress] = Callback(progress_message, IterationInterval(100))
 
-filename = "column"
+filename = "column_particles"
 simulation.output_writers[:profiles] = JLD2OutputWriter(model, merge(model.tracers, model.auxiliary_fields), filename = "$filename.jld2", schedule = TimeInterval(1day), overwrite_existing=true)
-#simulation.output_writers[:particles] = JLD2OutputWriter(model, (; particles), filename = "$(filename)_particles.jld2", schedule = TimeInterval(1day), overwrite_existing=true)
+simulation.output_writers[:particles] = JLD2OutputWriter(model, (; particles), filename = "$(filename)_particles.jld2", schedule = TimeInterval(1day), overwrite_existing=true)
 
-scale_negative_tracers = ScaleNegativeTracers(; model, tracers = (:NO₃, :NH₄, :P, :Z, :sPOM, :bPOM, :DOM))
+scale_negative_tracers = ScaleNegativeTracers(; model, tracers = (:NO₃, :NH₄, :P, :Z, :sPON, :bPON, :DON))
 simulation.callbacks[:neg] = Callback(scale_negative_tracers; callsite = UpdateStateCallsite())
 
 wizard = TimeStepWizard(cfl = 0.15, diffusive_cfl = 0.15, max_change = 2.0, min_change = 0.5, cell_diffusion_timescale = column_diffusion_timescale, cell_advection_timescale = column_advection_timescale)
