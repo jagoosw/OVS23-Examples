@@ -4,11 +4,11 @@ using Oceananigans, Printf, JLD2, OceanBioME
 using Oceananigans.Units
 
 # Set the domain size and grid spacing
-Lx=1e3;
-Ly=1e3;
-Lz=100;
-Nx=64;
-Ny=64;
+Lx=1000;
+Ly=1000;
+Lz=140;
+Nx=128;
+Ny=128;
 Nz=16;
 
 # Set the duration of the simulation 
@@ -21,7 +21,7 @@ grid = RectilinearGrid(size=(Nx, Ny, Nz), x=(0, Lx), y=(0, Ly), z=(-Lz, 0))
 coriolis = FPlane(f=1e-4) # [s⁻¹]
 
 # Specify parameters that are used to construct the background state
-background_state_parameters = ( M2 = 1e-8, # s⁻¹, geostrophic shear
+background_state_parameters = ( M2 = 3e-8, # s⁻¹, geostrophic shear
                                 f = coriolis.f,      # s⁻¹, Coriolis parameter
                                 N = 1e-4)            # s⁻¹, buoyancy frequency
 
@@ -165,8 +165,8 @@ end
 
 simulation.callbacks[:abort_zeros] = Callback(zero_negative_tracers!; callsite = UpdateStateCallsite())
 
-#run!(simulation)
-
+run!(simulation)
+#=
 #####
 ##### Didn't actually run consecutivly
 #####
@@ -269,3 +269,4 @@ simulation2.output_writers[:particles] = JLD2OutputWriter(model2, (particles = m
                                                                    overwrite_existing = true)
 
 #run!(simulation)
+=#
