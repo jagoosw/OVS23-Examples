@@ -4,30 +4,31 @@ using Oceananigans, Printf, JLD2, OceanBioME
 using Oceananigans.Units
 
 # Set the domain size and grid spacing
-Lx=1000;
-Ly=1000;
-Lz=140;
-Nx=128;
-Ny=128;
-Nz=16;
+const Lx=1000;
+const Ly=1000;
+const Lz=140;
+const Nx=128;
+const Ny=128;
+const Nz=16;
 
 # Set the duration of the simulation 
 duration = 10days;
 
 # Construct a grid with uniform grid spacing
-grid = RectilinearGrid(size=(Nx, Ny, Nz), x=(0, Lx), y=(0, Ly), z=(-Lz, 0))
+grid = RectilinearGrid(GPU(); size=(Nx, Ny, Nz), extent=(Lx, Ly, Lz))
 
 # Set the Coriolis parameter
-coriolis = FPlane(f=1e-4) # [s⁻¹]
+const f = 1e-4
 
 # Specify parameters that are used to construct the background state
-background_state_parameters = ( M2 = 3e-8, # s⁻¹, geostrophic shear
-                                f = coriolis.f,      # s⁻¹, Coriolis parameter
-                                N = 1e-4)            # s⁻¹, buoyancy frequency
+background_state_parameters = (; M2 = 3e-8, # s⁻¹, geostrophic shear
+                                 f,      # s⁻¹, Coriolis parameter
+                                 Lz,
+                                 N = 1e-4)            # s⁻¹, buoyancy frequency
 
 # Here, B is the background buoyancy field and V is the corresponding thermal wind
-V(x, y, z, t, p) = + p.M2/p.f * (z - Lz/2)
-B(x, y, z, t, p) = p.M2 * x + p.N^2 * (z - Lz/2)
+@inline V(x, y, z, t, p) = + p.M2/p.f * (z - p.Lz/2)
+@inline B(x, y, z, t, p) = p.M2 * x + p.N^2 * (z - p.Lz/2)
 
 V_field = BackgroundField(V, parameters = background_state_parameters)
 B_field = BackgroundField(B, parameters = background_state_parameters)
@@ -63,7 +64,7 @@ model = NonhydrostaticModel(;
                    boundary_conditions = (DIC = DIC_bcs, ),
               advection = CenteredSecondOrder(),
             timestepper = :RungeKutta3,
-               coriolis = coriolis,
+               coriolis = FPlane(; f),
                 tracers = :b,
                buoyancy = BuoyancyTracer(),
       background_fields = (b = B_field, v = V_field),
@@ -117,14 +118,8 @@ simulation.callbacks[:progress] = Callback(progress, IterationInterval(10))
 
 u, v, w = model.velocities # unpack velocity `Field`s
 
-# calculate the vertical vorticity [s⁻¹]
-ζ = Field(∂x(v) - ∂y(u))
-
-# horizontal divergence [s⁻¹]
-δ = Field(∂x(u) + ∂y(v))
-
 # Periodically write the velocity, vorticity, and divergence out to a file
-simulation.output_writers[:fields] = JLD2OutputWriter(model, merge(model.tracers, (; u, v, w, ζ, δ));
+simulation.output_writers[:fields] = JLD2OutputWriter(model, merge(model.tracers, (; u, v, w));
                                                       schedule = TimeInterval(4hours),
                                                       filename = "eady_turbulence_bgc",
                                                       overwrite_existing = true)
