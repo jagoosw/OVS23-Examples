@@ -96,7 +96,7 @@ Colorbar(fig[3, 1], vm2, vertical = false, label = "Phytoplankton concentration 
 Colorbar(fig[4, 1], vm3, vertical = false, label = "Organic carbon concentration (mmol C / m³)")
 Colorbar(fig[5, 1], vm4, vertical = false, label = "Inorganic carbon concentration (mmol C / m³)")
 =#
-n[] = 45
+#n[] = 45
 
 rotate_cam!(vm1.axis.scene, (0.2, 0, 0))
 zoom!(vm1.axis.scene, 0.7 ^ 2)
@@ -107,7 +107,7 @@ sc1.names.axisnames = ("x (m)", "y (m)", "z (m)")
 sc1.names.fontsize = (20, 20, 20)
 sc1.ticks.fontsize = (10, 10, 10)
 save("ovs_3d.png", fig)
-
+#=
 #=
 record(fig, "ovs_3d.mp4", 1:length(iterations), framerate = 5) do i
     n[] = i
@@ -140,3 +140,4 @@ Colorbar(fig[4, 1], vm4, vertical = false, label = "Inorganic carbon (mmol C / m
 
 save("ovs_colorbars.png", fig)
 
+=#

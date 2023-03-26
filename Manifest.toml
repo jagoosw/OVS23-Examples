@@ -2,7 +2,7 @@
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "3d63aade0d3a360c53f17aa15f13293c78cc60c8"
+project_hash = "a67d139758ec3052aee389d50cafc7e008348eed"
 
 [[deps.AMGX]]
 deps = ["AMGX_jll", "CEnum", "CUDA", "JSON", "Libdl", "SparseArrays"]
@@ -143,9 +143,9 @@ version = "0.4.0+2"
 
 [[deps.CUDA_Runtime_jll]]
 deps = ["Artifacts", "CUDA_Driver_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
-git-tree-sha1 = "de2e366b4e66a8690567d12dec6f550da9addec7"
+git-tree-sha1 = "275460951a8190d28995530f976729b8810c7e5e"
 uuid = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"
-version = "0.4.0+0"
+version = "0.4.0+1"
 
 [[deps.Cairo]]
 deps = ["Cairo_jll", "Colors", "Glib_jll", "Graphics", "Libdl", "Pango_jll"]
@@ -899,9 +899,9 @@ version = "0.1.7"
 
 [[deps.MPItrampoline_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML"]
-git-tree-sha1 = "c79b5e5212ed83bcc02faa1a5c4cdf75267a7885"
+git-tree-sha1 = "ad88f863a5a16b3e26d14446afd3cd746266281b"
 uuid = "f1f71cc9-e9ae-5b93-9b94-4fe0e1ad3748"
-version = "5.2.1+2"
+version = "5.2.1+3"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
@@ -1034,9 +1034,7 @@ version = "0.5.4"
 
 [[deps.OceanBioME]]
 deps = ["Adapt", "DiffEqBase", "JLD2", "KernelAbstractions", "Oceananigans", "Roots", "StructArrays"]
-git-tree-sha1 = "10b6b017d56dfaf18c8c1bc6d226334fa1845691"
-repo-rev = "main"
-repo-url = "https://github.com/OceanBioME/OceanBioME.jl"
+git-tree-sha1 = "78989fe7a22815a16769349ab6fda507dbae9aee"
 uuid = "a49af516-9db8-4be4-be45-1dad61c5a376"
 version = "0.1.0"
 
@@ -1795,10 +1793,10 @@ uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
 version = "1.2.12+3"
 
 [[deps.ZygoteRules]]
-deps = ["MacroTools"]
-git-tree-sha1 = "8c1a8e4dfacb1fd631745552c8db35d0deb09ea0"
+deps = ["ChainRulesCore", "MacroTools"]
+git-tree-sha1 = "977aed5d006b840e2e40c0b48984f7463109046d"
 uuid = "700de1a5-db45-46bc-99cf-38207098b444"
-version = "0.2.2"
+version = "0.2.3"
 
 [[deps.isoband_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]

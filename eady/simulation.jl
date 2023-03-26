@@ -4,31 +4,30 @@ using Oceananigans, Printf, JLD2, OceanBioME
 using Oceananigans.Units
 
 # Set the domain size and grid spacing
-const Lx=1000;
-const Ly=1000;
-const Lz=140;
-const Nx=128;
-const Ny=128;
-const Nz=16;
+Lx=1e3;
+Ly=1e3;
+Lz=100;
+Nx=64;
+Ny=64;
+Nz=16;
 
 # Set the duration of the simulation 
 duration = 10days;
 
 # Construct a grid with uniform grid spacing
-grid = RectilinearGrid(GPU(); size=(Nx, Ny, Nz), extent=(Lx, Ly, Lz))
+grid = RectilinearGrid(size=(Nx, Ny, Nz), x=(0, Lx), y=(0, Ly), z=(-Lz, 0))
 
 # Set the Coriolis parameter
-const f = 1e-4
+coriolis = FPlane(f=1e-4) # [s⁻¹]
 
 # Specify parameters that are used to construct the background state
-background_state_parameters = (; M2 = 3e-8, # s⁻¹, geostrophic shear
-                                 f,      # s⁻¹, Coriolis parameter
-                                 Lz,
-                                 N = 1e-4)            # s⁻¹, buoyancy frequency
+const background_state_parameters = ( M2 = 1e-8, # s⁻¹, geostrophic shear
+                                f = coriolis.f,      # s⁻¹, Coriolis parameter
+                                N = 1e-4)            # s⁻¹, buoyancy frequency
 
 # Here, B is the background buoyancy field and V is the corresponding thermal wind
-@inline V(x, y, z, t, p) = + p.M2/p.f * (z - p.Lz/2)
-@inline B(x, y, z, t, p) = p.M2 * x + p.N^2 * (z - p.Lz/2)
+V(x, y, z, t, p) = p.M2/p.f * (z - Lz/2)
+B(x, y, z, t, p) = p.M2 * x + p.N^2 * (z - Lz/2)
 
 V_field = BackgroundField(V, parameters = background_state_parameters)
 B_field = BackgroundField(B, parameters = background_state_parameters)
@@ -41,8 +40,7 @@ vertical_diffusivity = VerticalScalarDiffusivity(ν=κ₂z, κ=κ₂z)
 horizontal_diffusivity = HorizontalScalarDiffusivity(ν=κ₂h, κ=κ₂h)
 
 # Setup BGC
-
-# nitrate - restoring to a (made up) climatology otherwise we depleat Nutrients
+# nitrate - restoring to a (made up) climatology otherwise we depleat Nutrients in this open bottom scenario
 NO₃_forcing = Relaxation(rate = 1/10days, target = 4.0)
 
 # alkalinity - restoring to a (made up) climatology otherwise we depleat it
@@ -61,10 +59,10 @@ model = NonhydrostaticModel(;
                    grid,
                    biogeochemistry,
                    forcing = (NO₃ = NO₃_forcing, Alk = Alk_forcing),
-                   boundary_conditions = (DIC = DIC_bcs, ),
+                   boundary_conditions = (DIC = DIC_bcs, ),#b = FieldBoundaryConditions(bottom = b_bc)),
               advection = CenteredSecondOrder(),
             timestepper = :RungeKutta3,
-               coriolis = FPlane(; f),
+               coriolis = coriolis,
                 tracers = :b,
                buoyancy = BuoyancyTracer(),
       background_fields = (b = B_field, v = V_field),
@@ -80,7 +78,7 @@ vᵢ(x, y, z) = Ũ * Ξ(z)
 
 set!(model, u=uᵢ, v=vᵢ)
 
-
+# get a static vertical profile (arbitary initial conditions would be fine but might take longer to settle)
 @load "validation/LOBSTER/steady_state_PAR_100_NO3_4_Alk_2409_deep.jld2" steady_state
 
 for k in 1:grid.Nz
@@ -118,9 +116,15 @@ simulation.callbacks[:progress] = Callback(progress, IterationInterval(10))
 
 u, v, w = model.velocities # unpack velocity `Field`s
 
+# calculate the vertical vorticity [s⁻¹]
+ζ = Field(∂x(v) - ∂y(u))
+
+# horizontal divergence [s⁻¹]
+δ = Field(∂x(u) + ∂y(v))
+
 # Periodically write the velocity, vorticity, and divergence out to a file
-simulation.output_writers[:fields] = JLD2OutputWriter(model, merge(model.tracers, (; u, v, w));
-                                                      schedule = TimeInterval(4hours),
+simulation.output_writers[:fields] = JLD2OutputWriter(model, merge(model.tracers, (; u, v, w, ζ, δ));
+                                                      schedule = TimeInterval(1hours),
                                                       filename = "eady_turbulence_bgc",
                                                       overwrite_existing = true)
 nothing # hide
@@ -161,33 +165,30 @@ end
 simulation.callbacks[:abort_zeros] = Callback(zero_negative_tracers!; callsite = UpdateStateCallsite())
 
 run!(simulation)
-#=
-#####
-##### Didn't actually run consecutivly
-#####
 
 n = 25
-x₀ = [repeat([-200.0, -100.0, 0.0, 100.0, 200.0], 1, 5)...] .+ Lx / 2
-y₀ = [repeat([-200.0, -100.0, 0.0, 100.0, 200.0], 1, 5)'...] .+ Ly / 2
-z₀ = zeros(Float64, n)
+x = [repeat([-200.0, -100.0, 0.0, 100.0, 200.0], 1, 5)...] .+ Lx / 2
+y = [repeat([-200.0, -100.0, 0.0, 100.0, 200.0], 1, 5)'...] .+ Ly / 2
+z = zeros(Float64, n)
 
-function reset_location!(particles, model, Δt)
-  particles.properties.z .= 0.0
+function reset_location!(particles, model, bgc, Δt)
+  #particles.z .= 0.0
+  particles.y .+= V(0.0, 0.0, 0.0, model.clock.time, background_state_parameters) * Δt
 end
 
-particles = SLatissima.setup(; n, x₀, y₀, z₀, 
-                               A₀ = 5.0, N₀ = 0.01, C₀ = 0.18, 
-                               latitude = 57.5,
-                               scalefactor = 10.0 ^ 8, 
-                               optional_tracers = (:NH₄, :DIC, :bPON, :bPOC, :DON, :DOC),
-                               custom_dynamics = reset_location!,
-                               T = (args...) -> 12.0, S = (args...) -> 35.0, urel = 0.2)
+particles = SLatissima(; x, y, z, 
+                         A = 5.0 .* ones(n), N = 0.01.* ones(n), C = 0.18.* ones(n), 
+                         latitude = 57.5,
+                         scalefactor = 10.0 ^ 5,
+                         custom_dynamics = reset_location!,
+                         pescribed_temperature = (args...) -> 12.0)
 
 biogeochemistry2 = LOBSTER(; grid, 
                              carbonates = true, 
                              open_bottom = true,
                              variable_redfield = true,
-                             surface_phytosynthetically_active_radiation = (x, y, t) -> 100)
+                             surface_phytosynthetically_active_radiation = (x, y, t) -> 100,
+                             particles)
 
 model2 = NonhydrostaticModel(; grid,
                                biogeochemistry = biogeochemistry2,
@@ -199,32 +200,34 @@ model2 = NonhydrostaticModel(; grid,
                                tracers = :b,
                                buoyancy = BuoyancyTracer(),
                                background_fields = (b = B_field, v = V_field),
-                               closure = (vertical_diffusivity, horizontal_diffusivity),
-                               particles)
+                               closure = (vertical_diffusivity, horizontal_diffusivity))
 
-model2.clock.time = 50days
+model2.clock.time = 50days #for faster kelp growth
 
-@load "eady_model.jld2" velocities tracers
+file = jldopen("eady_turbulence_bgc.jld2")
+final_it = iterations = keys(file["timeseries/t"])[end]
 
-model2.velocities.u[1:Nx, 1:Ny, 1:Nz] = velocities.u[1:Nx, 1:Ny, 1:Nz];
-model2.velocities.v[1:Nx, 1:Ny, 1:Nz] = velocities.v[1:Nx, 1:Ny, 1:Nz];
-model2.velocities.w[1:Nx, 1:Ny, 1:Nz] = velocities.w[1:Nx, 1:Ny, 1:Nz];
+model2.velocities.u[1:Nx, 1:Ny, 1:Nz] = file["timeseries/u/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.velocities.v[1:Nx, 1:Ny, 1:Nz] = file["timeseries/v/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.velocities.w[1:Nx, 1:Ny, 1:Nz] = file["timeseries/w/$final_it"][1:Nx, 1:Ny, 1:Nz];
 
-model2.tracers.b[1:Nx, 1:Ny, 1:Nz] = tracers.b[1:Nx, 1:Ny, 1:Nz];
-model2.tracers.P[1:Nx, 1:Ny, 1:Nz] = tracers.P[1:Nx, 1:Ny, 1:Nz];
-model2.tracers.Z[1:Nx, 1:Ny, 1:Nz] = tracers.Z[1:Nx, 1:Ny, 1:Nz];
-model2.tracers.NO₃[1:Nx, 1:Ny, 1:Nz] = tracers.NO₃[1:Nx, 1:Ny, 1:Nz];
-model2.tracers.NH₄[1:Nx, 1:Ny, 1:Nz] = tracers.NH₄[1:Nx, 1:Ny, 1:Nz];
-model2.tracers.sPON[1:Nx, 1:Ny, 1:Nz] = tracers.sPOM[1:Nx, 1:Ny, 1:Nz];
-model2.tracers.sPOC[1:Nx, 1:Ny, 1:Nz] = tracers.sPOM[1:Nx, 1:Ny, 1:Nz] .* biogeochemistry2.organic_redfield;
-model2.tracers.bPON[1:Nx, 1:Ny, 1:Nz] = tracers.bPOM[1:Nx, 1:Ny, 1:Nz];
-model2.tracers.bPOC[1:Nx, 1:Ny, 1:Nz] = tracers.bPOM[1:Nx, 1:Ny, 1:Nz] .* biogeochemistry2.organic_redfield;
-model2.tracers.DON[1:Nx, 1:Ny, 1:Nz] = tracers.DOM[1:Nx, 1:Ny, 1:Nz];
-model2.tracers.DOC[1:Nx, 1:Ny, 1:Nz] = tracers.DOM[1:Nx, 1:Ny, 1:Nz] .* biogeochemistry2.organic_redfield;
-model2.tracers.DIC[1:Nx, 1:Ny, 1:Nz] = tracers.DIC[1:Nx, 1:Ny, 1:Nz];
-model2.tracers.Alk[1:Nx, 1:Ny, 1:Nz] = tracers.Alk[1:Nx, 1:Ny, 1:Nz];
+model2.tracers.b[1:Nx, 1:Ny, 1:Nz] = file["timeseries/b/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.tracers.P[1:Nx, 1:Ny, 1:Nz] = file["timeseries/P/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.tracers.Z[1:Nx, 1:Ny, 1:Nz] = file["timeseries/Z/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.tracers.NO₃[1:Nx, 1:Ny, 1:Nz] = file["timeseries/NO₃/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.tracers.NH₄[1:Nx, 1:Ny, 1:Nz] = file["timeseries/NH₄/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.tracers.sPON[1:Nx, 1:Ny, 1:Nz] = file["timeseries/sPOM/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.tracers.sPOC[1:Nx, 1:Ny, 1:Nz] = file["timeseries/sPOM/$final_it"][1:Nx, 1:Ny, 1:Nz] .* biogeochemistry2.organic_redfield;
+model2.tracers.bPON[1:Nx, 1:Ny, 1:Nz] = file["timeseries/bPOM/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.tracers.bPOC[1:Nx, 1:Ny, 1:Nz] = file["timeseries/bPOM/$final_it"][1:Nx, 1:Ny, 1:Nz] .* biogeochemistry2.organic_redfield;
+model2.tracers.DON[1:Nx, 1:Ny, 1:Nz] = file["timeseries/DOM/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.tracers.DOC[1:Nx, 1:Ny, 1:Nz] = file["timeseries/DOM/$final_it"][1:Nx, 1:Ny, 1:Nz] .* biogeochemistry2.organic_redfield;
+model2.tracers.DIC[1:Nx, 1:Ny, 1:Nz] = file["timeseries/DIC/$final_it"][1:Nx, 1:Ny, 1:Nz];
+model2.tracers.Alk[1:Nx, 1:Ny, 1:Nz] = file["timeseries/Alk/$final_it"][1:Nx, 1:Ny, 1:Nz];
 
-simulation2 = Simulation(model2, Δt = max_Δt, stop_time = 70days)
+close(file)
+
+simulation2 = Simulation(model2, Δt = 5minutes, stop_time = 70days)
 
 # Adapt the time step while keeping the CFL number fixed
 wizard = TimeStepWizard(cfl=0.8, max_change=1.5)
@@ -258,10 +261,9 @@ simulation2.callbacks[:nan_tendencies] = Callback(remove_NaN_tendencies!; callsi
 
 simulation2.callbacks[:abort_zeros] = Callback(zero_negative_tracers!; callsite = UpdateStateCallsite())
 
-simulation2.output_writers[:particles] = JLD2OutputWriter(model2, (particles = model2.particles, );
+simulation2.output_writers[:particles] = JLD2OutputWriter(model2, (; particles);
                                                                    schedule = TimeInterval(1hours),
                                                                    filename = "eady_turbulence_bgc_with_particles_dense_particles",
                                                                    overwrite_existing = true)
 
-#run!(simulation)
-=#
+run!(simulation2)
