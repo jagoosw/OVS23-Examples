@@ -18,8 +18,7 @@ julia> include("eady/animation.jl")
 
 # Results
 ## Baroclinical instability with kelp-seeded buoys
-
-https://user-images.githubusercontent.com/26657828/227775318-e777d82b-6894-4481-a6d3-9b2de6f64d41.mp4
+https://user-images.githubusercontent.com/26657828/227775767-61fbf724-6b71-4181-8304-0891f8cdd5c5.mp4
 
 ## Column
 ![ovs_column](https://user-images.githubusercontent.com/26657828/227775254-a510014d-91ad-4b33-9cc3-2278a9082d20.png)
