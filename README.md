@@ -10,3 +10,13 @@ julia> using Pkg
 julia> Pkg.instantiate()
 julia> include("eady/simulaiton.jl")
 ```
+
+You can then run the plotting files:
+```julia
+julia> include("eady/animation.jl")
+```
+
+# Results
+## Baroclinical instability with kelp-seeded buoys
+
+## Column
