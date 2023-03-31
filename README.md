@@ -1,6 +1,6 @@
 # Ocean Visions Summit 2023
 
-Here you will find the code used to generate the figures for [my poster](poster.pdf) at Ocean Visions Summit 2023.
+Here you will find the code used to generate the figures for [my poster](https://github.com/jagoosw/OVS23-Examples/raw/main/poster.pdf) at Ocean Visions Summit 2023.
 
 ## How to run:
 The required dependencies should be detailed in `Project.toml`, so you can instantiate the environment and then run the simulations:
